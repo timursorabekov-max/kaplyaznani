@@ -3,7 +3,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const nodemailer = require('nodemailer');
 const { createHmac, randomInt, randomUUID, timingSafeEqual } = require('crypto');
 
 const app = express();
@@ -370,21 +369,30 @@ function buildInclusionNotificationText(order) {
 }
 
 async function sendOrderEmail(order) {
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM_EMAIL;
 
-  if (!host || !user || !pass) {
-    throw new Error('Email не отправлен: настройте SMTP_HOST, SMTP_USER и SMTP_PASS.');
+  if (!apiKey || !from) {
+    throw new Error('Email не отправлен: настройте RESEND_API_KEY и RESEND_FROM_EMAIL.');
   }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: Number(port) === 465,
-    auth: { user, pass }
-  });
+  async function sendEmail(message) {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ from, ...message }),
+      signal: AbortSignal.timeout(15000)
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Resend email request failed (HTTP ${response.status}): ${detail}`);
+    }
+  }
+
   const missingLinks = order.items
     .filter((item) => item.category === 'book' && !item.accessUrl && item.id !== 'book-inclusion')
     .map((item) => item.title);
@@ -393,8 +401,7 @@ async function sendOrderEmail(order) {
     order.items.some((item) => item.id === 'book-inclusion') &&
     !order.inclusionOwnerNotifiedAt
   ) {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || user,
+    await sendEmail({
       to: process.env.STORE_NOTIFICATION_EMAIL || process.env.CONTACT_EMAIL || 'timursorabekov@gmail.com',
       subject: `Оплачена «Включение» — заказ ${order.id}`,
       text: buildInclusionNotificationText(order)
@@ -402,8 +409,7 @@ async function sendOrderEmail(order) {
     order.inclusionOwnerNotifiedAt = new Date().toISOString();
   }
 
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || user,
+  await sendEmail({
     to: order.email,
     subject: `Ваши материалы — заказ ${order.id}`,
     text: buildDeliveryText(order),

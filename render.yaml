@@ -26,13 +26,7 @@ services:
         sync: false
       - key: BOOK_ACCESS_SECRET
         sync: false
-      - key: SMTP_HOST
+      - key: RESEND_API_KEY
         sync: false
-      - key: SMTP_PORT
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: SMTP_FROM
+      - key: RESEND_FROM_EMAIL
         sync: false

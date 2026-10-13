@@ -1,7 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { once } = require("node:events");
-const nodemailer = require("nodemailer");
 
 const appModule = require("../server");
 const app = appModule.app || appModule;
@@ -171,25 +170,23 @@ test("Inclusion order email contains a signed link to the private 40-day program
 });
 
 test("paid Inclusion delivery notifies the store email with buyer contact details", async () => {
-  const envKeys = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "CONTACT_EMAIL", "STORE_NOTIFICATION_EMAIL"];
+  const envKeys = ["RESEND_API_KEY", "RESEND_FROM_EMAIL", "CONTACT_EMAIL", "STORE_NOTIFICATION_EMAIL"];
   const originalEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
-  const originalCreateTransport = nodemailer.createTransport;
   const sentMessages = [];
+  const originalFetch = global.fetch;
   Object.assign(process.env, {
-    SMTP_HOST: "smtp.example.com",
-    SMTP_PORT: "587",
-    SMTP_USER: "sender@example.com",
-    SMTP_PASS: "test-password",
-    SMTP_FROM: "sender@example.com",
+    RESEND_API_KEY: "test-resend-api-key",
+    RESEND_FROM_EMAIL: "Капля Знаний <materials@example.com>",
     CONTACT_EMAIL: "support@example.com",
     STORE_NOTIFICATION_EMAIL: "timursorabekov@gmail.com"
   });
-  nodemailer.createTransport = () => ({
-    sendMail: async (message) => {
-      sentMessages.push(message);
-      return { accepted: [message.to] };
-    }
-  });
+  global.fetch = async (url, options) => {
+    assert.equal(url, "https://api.resend.com/emails");
+    assert.equal(options.headers.Authorization, "Bearer test-resend-api-key");
+    const message = JSON.parse(options.body);
+    sentMessages.push(message);
+    return Response.json({ id: `email-${sentMessages.length}` });
+  };
 
   try {
     const inclusion = appModule.products.find((product) => product.id === "book-inclusion");
@@ -206,6 +203,7 @@ test("paid Inclusion delivery notifies the store email with buyer contact detail
     await appModule.sendOrderEmail(order);
 
     assert.equal(sentMessages.length, 2);
+    assert.equal(sentMessages[0].from, "Капля Знаний <materials@example.com>");
     assert.equal(sentMessages[0].to, "timursorabekov@gmail.com");
     assert.match(sentMessages[0].subject, /Включение/);
     assert.match(sentMessages[0].text, /Покупатель Тестовый/);
@@ -215,9 +213,10 @@ test("paid Inclusion delivery notifies the store email with buyer contact detail
     assert.equal(sentMessages[0].text.includes("signed-token"), false);
     assert.equal(sentMessages[1].to, "buyer@example.com");
     assert.match(sentMessages[1].text, /signed-token/);
+    assert.match(sentMessages[1].html, /signed-token/);
     assert.ok(order.inclusionOwnerNotifiedAt);
   } finally {
-    nodemailer.createTransport = originalCreateTransport;
+    global.fetch = originalFetch;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
@@ -230,17 +229,15 @@ test("Halyk payment session requests an OAuth token and returns widget parameter
     clientId: process.env.HALYK_EPAY_CLIENT_ID,
     clientSecret: process.env.HALYK_EPAY_CLIENT_SECRET,
     terminalId: process.env.HALYK_EPAY_TERMINAL_ID,
-    smtpHost: process.env.SMTP_HOST,
-    smtpUser: process.env.SMTP_USER,
-    smtpPass: process.env.SMTP_PASS
+    resendApiKey: process.env.RESEND_API_KEY,
+    resendFromEmail: process.env.RESEND_FROM_EMAIL
   };
   Object.assign(process.env, {
     HALYK_EPAY_CLIENT_ID: "test-client",
     HALYK_EPAY_CLIENT_SECRET: "test-client-secret",
     HALYK_EPAY_TERMINAL_ID: "test-terminal",
-    SMTP_HOST: "",
-    SMTP_USER: "",
-    SMTP_PASS: ""
+    RESEND_API_KEY: "",
+    RESEND_FROM_EMAIL: ""
   });
 
   const originalFetch = global.fetch;
@@ -337,9 +334,8 @@ test("Halyk payment session requests an OAuth token and returns widget parameter
       HALYK_EPAY_CLIENT_ID: originalEnv.clientId,
       HALYK_EPAY_CLIENT_SECRET: originalEnv.clientSecret,
       HALYK_EPAY_TERMINAL_ID: originalEnv.terminalId,
-      SMTP_HOST: originalEnv.smtpHost,
-      SMTP_USER: originalEnv.smtpUser,
-      SMTP_PASS: originalEnv.smtpPass
+      RESEND_API_KEY: originalEnv.resendApiKey,
+      RESEND_FROM_EMAIL: originalEnv.resendFromEmail
     })) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
