@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: timur-shorabekov-store
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: PUBLIC_BASE_URL
+        value: https://timurshorabekov.kz
+      - key: CONTACT_EMAIL
+        sync: false
+      - key: STORE_NOTIFICATION_EMAIL
+        value: timursorabekov@gmail.com
+      - key: HALYK_EPAY_MODE
+        value: production
+      - key: HALYK_EPAY_CLIENT_ID
+        sync: false
+      - key: HALYK_EPAY_CLIENT_SECRET
+        sync: false
+      - key: HALYK_EPAY_TERMINAL_ID
+        sync: false
+      - key: BOOK_ACCESS_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false

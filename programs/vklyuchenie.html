@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Включение · ПЕГАС-40</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0a0a;
+      --panel: #151411;
+      --text: #ede8dc;
+      --muted: #908070;
+      --gold: #c8a84b;
+      --line: rgba(255, 255, 255, .08);
+      --green: #6db33f;
+      --red: #eb5757;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.6 Raleway, Arial, sans-serif;
+    }
+    button, textarea, input { font: inherit; }
+    button { cursor: pointer; }
+    .container { width: min(760px, 100%); margin: auto; padding: 16px 20px 48px; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding: 8px 0 16px; }
+    .logo { color: var(--gold); font: 900 23px Georgia, serif; letter-spacing: 2px; }
+    .logo span { color: var(--text); font-weight: 400; }
+    .privacy { color: var(--muted); font-size: 11px; text-align: right; }
+    .hero { padding: 32px 0 10px; }
+    h1, h2, h3 { font-family: Georgia, serif; }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 7vw, 42px); line-height: 1.15; }
+    h2 { font-size: 20px; margin: 24px 0 10px; }
+    .gold { color: var(--gold); }
+    .muted { color: var(--muted); }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
+    .stat, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    .stat { text-align: center; }
+    .stat strong { display: block; color: var(--gold); font: 900 28px Georgia, serif; }
+    .stat span { color: var(--muted); font-size: 11px; text-transform: uppercase; }
+    .day-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 18px; }
+    .day-button, .scale-button, .button {
+      color: var(--text);
+      background: #1a1916;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 8px 12px;
+    }
+    .day-button { min-width: 38px; }
+    .day-button.active, .scale-button.selected { border-color: var(--gold); background: rgba(200, 168, 75, .13); }
+    .day-button.done { color: var(--green); }
+    .day-button:disabled { opacity: .35; cursor: not-allowed; }
+    .section-title { display: flex; align-items: center; gap: 8px; margin: 22px 0 8px; font: 900 20px Georgia, serif; }
+    .section-title .tag { color: var(--gold); font: 700 10px Arial, sans-serif; letter-spacing: .7px; text-transform: uppercase; }
+    .scale-list { display: grid; gap: 5px; }
+    .scale-button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+    .scale-number { min-width: 34px; text-align: center; font: 900 17px Georgia, serif; }
+    .scale-number.plus { color: var(--green); }
+    .scale-number.zero { color: #f2c94c; }
+    .scale-number.minus { color: var(--red); }
+    label { display: block; color: var(--muted); font-size: 11px; font-weight: 700; margin: 12px 0 5px; text-transform: uppercase; }
+    textarea, input[type="text"] {
+      display: block;
+      width: 100%;
+      padding: 11px 12px;
+      color: var(--text);
+      background: rgba(255,255,255,.035);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      outline: none;
+    }
+    textarea:focus, input[type="text"]:focus { border-color: var(--gold); }
+    textarea { min-height: 84px; resize: vertical; }
+    .hint { color: var(--muted); font-size: 12px; }
+    .video { overflow: hidden; margin: 10px 0; border: 1px solid var(--line); border-radius: 10px; }
+    .video iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; }
+    .senses { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .sense { padding: 10px; background: rgba(255,255,255,.025); border: 1px solid var(--line); border-radius: 8px; }
+    .sense label { margin-top: 0; }
+    .sense input { text-align: center; }
+    .sense-wide { grid-column: 1 / -1; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+    .button { min-height: 46px; }
+    .button-primary { color: #0a0a0a; background: var(--gold); border-color: var(--gold); font-weight: 800; }
+    .history-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .notice { margin-top: 20px; padding: 12px; color: var(--muted); background: rgba(200,168,75,.06); border-radius: 8px; font-size: 12px; }
+    #toast { position: fixed; left: 50%; bottom: 20px; z-index: 5; transform: translateX(-50%); padding: 12px 18px; color: #0a0a0a; background: var(--gold); border-radius: 8px; font-weight: 700; }
+    #toast[hidden] { display: none; }
+    @media (max-width: 480px) {
+      .container { padding: 12px 14px 32px; }
+      .stats { gap: 6px; }
+      .stat { padding: 10px 5px; }
+      .stat strong { font-size: 23px; }
+      .senses { gap: 6px; }
+      .history-item { font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="topbar">
+      <div class="logo">ПЕГАС<span>·40</span></div>
+      <div class="privacy">ЗАКРЫТАЯ ПРОГРАММА<br>Ваши записи остаются в этом браузере</div>
+    </header>
+    <section class="hero">
+      <h1>Программа <span class="gold">«Включение»</span></h1>
+      <p class="muted">Практика на 40 дней: отмечайте состояние, выполняйте упражнения и сохраняйте свои наблюдения.</p>
+    </section>
+
+    <section class="stats" aria-label="Мой прогресс">
+      <div class="stat"><strong id="stat-day">1</strong><span>Текущий день</span></div>
+      <div class="stat"><strong id="stat-floor">—</strong><span>Состояние</span></div>
+      <div class="stat"><strong id="stat-wins">0</strong><span>Победы</span></div>
+    </section>
+
+    <h2>Мои дни</h2>
+    <div id="day-selector" class="day-list" aria-label="Выбор дня"></div>
+    <section id="day-form" aria-live="polite">
+      <div class="section-title">🌅 Утро <span class="tag">Градусник</span></div>
+      <p class="hint">Как вы себя чувствуете сейчас? Выберите подходящее состояние.</p>
+      <div id="scale-morning" class="scale-list"></div>
+
+      <div class="section-title">🧘 Ловец жемчуга <span class="tag">Упражнение</span></div>
+      <div class="video"><iframe src="https://www.youtube.com/embed/WwvCe_3FOE4?rel=0" title="Ловец жемчуга — упражнение" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>
+      <button type="button" class="button" id="pearl-button">✅ Выполнил</button>
+
+      <div class="section-title">🔥 20 будильников <span class="tag">Освобождение</span></div>
+      <label for="burn-text">Запишите то, что сейчас тревожит</label>
+      <textarea id="burn-text" placeholder="Например: незавершённое дело, важный разговор..."></textarea>
+      <div class="actions">
+        <button type="button" class="button" id="preview-burn">Показать запись</button>
+        <button type="button" class="button" id="burn-button">Отпустить 🔥</button>
+      </div>
+      <p id="burn-result" class="hint" aria-live="polite"></p>
+
+      <div class="section-title">🏆 5 + 5 побед <span class="tag">Доказательства</span></div>
+      <label for="wins-past">Пять побед из прошлого</label>
+      <textarea id="wins-past" placeholder="Каждая победа — с новой строки"></textarea>
+      <label for="wins-today">Пять побед за сегодня</label>
+      <textarea id="wins-today" placeholder="Большие и маленькие достижения"></textarea>
+
+      <div class="section-title">🌈 7 чудес души и тела <span class="tag">Наблюдение</span></div>
+      <div class="video"><iframe src="https://www.youtube.com/embed/ZqG3jnsvTR8?rel=0" title="7 чудес души и тела" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>
+      <p class="hint">Оцените от −10 до +10 и при желании запишите наблюдение.</p>
+      <div id="senses" class="senses"></div>
+
+      <div class="section-title">🌙 Вечер <span class="tag">Градусник</span></div>
+      <div id="scale-evening" class="scale-list"></div>
+
+      <button type="button" class="button button-primary" id="save-day" style="width:100%;margin-top:18px">💾 Сохранить день</button>
+    </section>
+
+    <section>
+      <div class="section-title">📊 Моя история</div>
+      <div id="history-list"></div>
+      <div class="actions">
+        <button type="button" class="button" id="export-data">📥 Скачать отчёт</button>
+        <button type="button" class="button" id="clear-data">Очистить прогресс</button>
+      </div>
+    </section>
+    <p class="notice">Прогресс хранится только в локальном хранилище этого браузера и не отправляется в Google Таблицы. Очистка данных браузера или переход на другое устройство может удалить записи — скачивайте отчёт для резервной копии.</p>
+  </main>
+  <div id="toast" role="status" hidden></div>
+
+  <script>
+    (() => {
+      const accessToken = new URLSearchParams(location.search).get('access') || '';
+      const storageKey = `pegas40-progress-${accessToken}`;
+      const states = [
+        [6, '🚀', 'Пик. Всё получается'], [5, '⚡', 'Поток. Вдохновение'],
+        [4, '🔥', 'Азарт. Хочу действовать'], [3, '😊', 'Хорошо. Настроение есть'],
+        [2, '🙂', 'Неплохо. Всё нормально'], [1, '😐', 'Так себе. Но терпимо'],
+        [0, '🤷', 'Нейтрально'], [-1, '😕', 'Немного не в себе'],
+        [-2, '😟', 'Тревога. Напряжение'], [-3, '😰', 'Страх. Паника'],
+        [-4, '😔', 'Апатия. Нет сил'], [-5, '😢', 'Отчаяние'], [-6, '💀', 'Коллапс']
+      ];
+      const senses = ['👁 Зрение', '👂 Слух', '👃 Обоняние', '👅 Вкус', '✋ Осязание', '🌟 Воображение', '⚡ Действие'];
+      let allData = readData();
+      let currentDay = getNextDay();
+      let currentBurned = false;
+
+      function readData() {
+        try {
+          const data = JSON.parse(localStorage.getItem(storageKey) || '[]');
+          return Array.isArray(data) ? data : [];
+        } catch (error) {
+          console.error('Не удалось прочитать сохранённый прогресс:', error);
+          return [];
+        }
+      }
+
+      function persist() {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(allData));
+        } catch (error) {
+          console.error('Не удалось сохранить прогресс:', error);
+          showToast('Не удалось сохранить. Освободите место в браузере.');
+        }
+      }
+
+      function getNextDay() {
+        const maxDay = allData.reduce((max, item) => Math.max(max, Number(item.day) || 0), 0);
+        return Math.min(maxDay + 1, 40);
+      }
+
+      function getFloor(value) {
+        if (value >= 4) return 'Приобретение';
+        if (value > 0) return 'Плюс';
+        if (value === 0) return 'Порог выбора';
+        if (value >= -2) return 'Напряжение';
+        return 'Сложное состояние';
+      }
+
+      function renderScale(gridId, value) {
+        const grid = document.getElementById(gridId);
+        grid.replaceChildren();
+        states.forEach(([score, emoji, label]) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = `scale-button${Number(value) === score ? ' selected' : ''}`;
+          button.dataset.value = score;
+          const numberClass = score > 0 ? 'plus' : score < 0 ? 'minus' : 'zero';
+          button.innerHTML = `<span class="scale-number ${numberClass}">${score > 0 ? '+' : ''}${score}</span><span>${emoji}</span><span>${label}</span>`;
+          button.addEventListener('click', () => {
+            grid.querySelectorAll('.scale-button').forEach((item) => item.classList.remove('selected'));
+            button.classList.add('selected');
+            updateFloor();
+          });
+          grid.append(button);
+        });
+      }
+
+      function renderSenses(data = {}) {
+        const container = document.getElementById('senses');
+        container.replaceChildren();
+        senses.forEach((name, index) => {
+          const item = document.createElement('div');
+          item.className = `sense${index === 6 ? ' sense-wide' : ''}`;
+          item.innerHTML = `<label for="sense-${index}">${name}</label><input id="sense-${index}" type="number" min="-10" max="10" step="1" placeholder="−10 … +10" value="${escapeHtml(data[`sense${index}Score`] || '')}"><input id="sense-note-${index}" type="text" maxlength="200" placeholder="Что именно?" value="${escapeHtml(data[`sense${index}Note`] || '')}" aria-label="${name}: заметка">`;
+          container.append(item);
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (char) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        })[char]);
+      }
+
+      function updateSelector() {
+        const selector = document.getElementById('day-selector');
+        selector.replaceChildren();
+        for (let day = 1; day <= 40; day += 1) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'day-button';
+          button.textContent = day;
+          button.classList.toggle('active', day === currentDay);
+          button.classList.toggle('done', allData.some((item) => Number(item.day) === day));
+          button.disabled = day > getNextDay();
+          button.setAttribute('aria-label', `День ${day}${button.disabled ? ', пока недоступен' : ''}`);
+          button.addEventListener('click', () => {
+            if (day <= getNextDay()) loadDay(day);
+          });
+          selector.append(button);
+        }
+        document.getElementById('stat-day').textContent = currentDay;
+      }
+
+      function setValue(id, value) {
+        const field = document.getElementById(id);
+        if (field) field.value = value || '';
+      }
+
+      function loadDay(day) {
+        currentDay = day;
+        const data = allData.find((item) => Number(item.day) === day) || {};
+        renderScale('scale-morning', data.morning);
+        renderScale('scale-evening', data.evening);
+        setValue('burn-text', data.burnText);
+        setValue('wins-past', data.winsPast);
+        setValue('wins-today', data.winsToday);
+        document.getElementById('burn-result').textContent = data.burned ? '🔥 Запись отмечена как отпущенная.' : '';
+        currentBurned = data.burned === true;
+        document.getElementById('pearl-button').textContent = data.pearl ? '✅ Упражнение выполнено' : '✅ Выполнил';
+        renderSenses(data);
+        updateSelector();
+        updateFloor();
+      }
+
+      function selectedValue(id) {
+        const selected = document.querySelector(`#${id} .scale-button.selected`);
+        return selected ? Number(selected.dataset.value) : null;
+      }
+
+      function updateFloor() {
+        const evening = selectedValue('scale-evening');
+        const morning = selectedValue('scale-morning');
+        document.getElementById('stat-floor').textContent = evening === null && morning === null
+          ? '—'
+          : getFloor(evening === null ? morning : evening);
+      }
+
+      function countWins(text) {
+        return String(text || '').split(/\r?\n/).filter((line) => line.trim()).length;
+      }
+
+      function updateHistory() {
+        const list = document.getElementById('history-list');
+        list.replaceChildren();
+        if (!allData.length) {
+          list.innerHTML = '<p class="muted">Нет сохранённых дней</p>';
+          return;
+        }
+        allData.slice().sort((a, b) => a.day - b.day).slice(-10).forEach((item) => {
+          const row = document.createElement('div');
+          row.className = 'history-item';
+          const summary = document.createElement('span');
+          summary.textContent = `День ${item.day} · утро ${item.morning} → вечер ${item.evening}`;
+          const wins = document.createElement('strong');
+          wins.className = 'gold';
+          wins.textContent = `🏆 ${countWins(item.winsPast) + countWins(item.winsToday)}`;
+          row.append(summary, wins);
+          list.append(row);
+        });
+        document.getElementById('stat-wins').textContent = allData.reduce((sum, item) =>
+          sum + countWins(item.winsPast) + countWins(item.winsToday), 0);
+      }
+
+      function showToast(message) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.hidden = false;
+        window.setTimeout(() => { toast.hidden = true; }, 2800);
+      }
+
+      document.getElementById('pearl-button').addEventListener('click', (event) => {
+        event.currentTarget.textContent = '✅ Упражнение выполнено';
+      });
+      document.getElementById('preview-burn').addEventListener('click', () => {
+        const text = document.getElementById('burn-text').value.trim();
+        showToast(text ? 'Запись сохранена в форме дня.' : 'Сначала добавьте запись.');
+      });
+      document.getElementById('burn-button').addEventListener('click', () => {
+        if (!document.getElementById('burn-text').value.trim()) {
+          showToast('Сначала запишите то, что хотите отпустить.');
+          return;
+        }
+        currentBurned = true;
+        document.getElementById('burn-result').textContent = '🔥 Отмечено. Вы можете вернуться к этому позже.';
+      });
+      document.getElementById('save-day').addEventListener('click', () => {
+        const morning = selectedValue('scale-morning');
+        const evening = selectedValue('scale-evening');
+        if (morning === null || evening === null) {
+          showToast('Отметьте состояние утром и вечером.');
+          return;
+        }
+        const senseScores = senses.map((_, index) => document.getElementById(`sense-${index}`).value.trim());
+        if (senseScores.some((score) => score !== '' && (!Number.isInteger(Number(score)) || Number(score) < -10 || Number(score) > 10))) {
+          showToast('Оценки семи чувств должны быть целыми числами от −10 до +10.');
+          return;
+        }
+        const data = {
+          day: currentDay, morning, evening,
+          pearl: document.getElementById('pearl-button').textContent.includes('выполнено'),
+          burnText: document.getElementById('burn-text').value.trim(),
+          burned: currentBurned,
+          winsPast: document.getElementById('wins-past').value.trim(),
+          winsToday: document.getElementById('wins-today').value.trim(),
+          updatedAt: new Date().toISOString()
+        };
+        senses.forEach((_, index) => {
+          data[`sense${index}Score`] = senseScores[index];
+          data[`sense${index}Note`] = document.getElementById(`sense-note-${index}`).value.trim();
+        });
+        const index = allData.findIndex((item) => Number(item.day) === currentDay);
+        if (index < 0) allData.push(data);
+        else allData[index] = data;
+        persist();
+        currentDay = getNextDay();
+        updateSelector();
+        updateHistory();
+        loadDay(Math.min(currentDay, 40));
+        showToast('День сохранён.');
+      });
+      document.getElementById('export-data').addEventListener('click', () => {
+        if (!allData.length) return showToast('Пока нечего экспортировать.');
+        const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'pegas40-progress.json';
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+      document.getElementById('clear-data').addEventListener('click', () => {
+        if (!window.confirm('Удалить сохранённый прогресс на этом устройстве?')) return;
+        allData = [];
+        currentDay = 1;
+        persist();
+        updateHistory();
+        loadDay(currentDay);
+        showToast('Прогресс удалён.');
+      });
+
+      updateHistory();
+      loadDay(currentDay);
+    })();
+  </script>
+</body>
+</html>
