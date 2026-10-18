@@ -26,7 +26,11 @@ services:
         sync: false
       - key: BOOK_ACCESS_SECRET
         sync: false
-      - key: SENDGRID_API_KEY
+      - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
-      - key: SENDGRID_FROM_EMAIL
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
+      - key: GOOGLE_OAUTH_REFRESH_TOKEN
+        sync: false
+      - key: GOOGLE_EMAIL
+        value: timursorabekov@gmail.com

@@ -32,7 +32,7 @@ npm start
 - `HALYK_EPAY_CLIENT_SECRET`
 - `HALYK_EPAY_TERMINAL_ID`
 - `PUBLIC_BASE_URL=https://timurshorabekov.kz`
-- SMTP-параметры почтового ящика для отправки писем
+- Gmail API OAuth-параметры для отправки писем
 
 ## Render
 
@@ -88,14 +88,23 @@ npm start
 
 ## Автоматическая отправка материалов
 
-После успешной оплаты система отправляет покупателю письмо с доступом к материалам, а для «Включения» — также уведомление магазину. Отправка выполняется через HTTPS API SendGrid, поэтому она не зависит от исходящих SMTP-портов Render.
+После успешной оплаты система отправляет покупателю письмо с доступом к материалам, а для «Включения» — также уведомление магазину. Отправка выполняется через Gmail API по HTTPS, поэтому не зависит от исходящих SMTP-портов Render.
 
-Задайте параметры SendGrid в локальном `.env` или секретах хостинга:
+Настройка Gmail API:
 
-- `SENDGRID_API_KEY` — API-ключ SendGrid с разрешением отправлять почту
-- `SENDGRID_FROM_EMAIL` — подтверждённый отправитель SendGrid
+1. В Google Cloud создайте проект и включите Gmail API.
+2. Настройте OAuth consent screen и OAuth-клиент.
+3. В OAuth Playground (`https://developers.google.com/oauthplayground/`) укажите собственные OAuth credentials, запросите scope `https://www.googleapis.com/auth/gmail.send`, авторизуйте нужный Gmail-ящик и получите refresh token.
+4. Укажите этот же Gmail-адрес в `GOOGLE_EMAIL` и добавьте OAuth-параметры в Render Environment.
 
-Создайте и подтвердите отправителя в SendGrid, затем добавьте API-ключ и email отправителя в Render Environment. Храните API-ключ только в секретах хостинга или локальном `.env`; не добавляйте его в Git. Без этих параметров письма не отправляются, а ошибка явно записывается сервером.
+Если приложение Google оставлено в режиме Testing, refresh token для Gmail scope может истечь через 7 дней; для постоянной работы настройте публикацию приложения и выполните требования Google к проверке OAuth. Секреты задайте также в локальном `.env` для разработки:
+
+- `GOOGLE_OAUTH_CLIENT_ID` — OAuth client ID из Google Cloud
+- `GOOGLE_OAUTH_CLIENT_SECRET` — OAuth client secret
+- `GOOGLE_OAUTH_REFRESH_TOKEN` — долгосрочный OAuth refresh token
+- `GOOGLE_EMAIL` — Gmail-адрес, с которого отправляются письма
+
+Добавьте OAuth-параметры в Render Environment; секреты храните только в настройках хостинга или локальном `.env`, не в Git. Без этих параметров письма не отправляются, а ошибка явно записывается сервером.
 
 При подтверждённой оплате книги «Включение» магазин дополнительно отправляет на `STORE_NOTIFICATION_EMAIL` имя, телефон, email покупателя и номер заказа. Если переменная не задана, используется `CONTACT_EMAIL`.
 
