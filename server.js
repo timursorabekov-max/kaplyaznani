@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const nodemailer = require('nodemailer');
 const path = require('path');
 const { createHmac, randomInt, randomUUID, timingSafeEqual } = require('crypto');
 
@@ -369,30 +370,29 @@ function buildInclusionNotificationText(order) {
 }
 
 async function sendOrderEmail(order) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
+  const host = process.env.SMTP_HOST?.trim();
+  const port = Number(process.env.SMTP_PORT);
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS;
+  const from = process.env.SMTP_FROM_EMAIL?.trim();
 
-  if (!apiKey || !from) {
-    throw new Error('Email не отправлен: настройте RESEND_API_KEY и RESEND_FROM_EMAIL.');
+  if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !user || !pass || !from) {
+    throw new Error('Email не отправлен: настройте SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS и SMTP_FROM_EMAIL.');
   }
 
-  async function sendEmail(message) {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ from, ...message }),
-      signal: AbortSignal.timeout(15000)
-    });
-
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(`Resend email request failed (HTTP ${response.status}): ${detail}`);
-    }
-  }
-
+  const secure = process.env.SMTP_SECURE
+    ? process.env.SMTP_SECURE.toLowerCase() === 'true'
+    : port === 465;
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 15000
+  });
+  const sendEmail = (message) => transporter.sendMail({ from, ...message });
   const missingLinks = order.items
     .filter((item) => item.category === 'book' && !item.accessUrl && item.id !== 'book-inclusion')
     .map((item) => item.title);
