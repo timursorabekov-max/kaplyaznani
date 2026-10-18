@@ -2,7 +2,6 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const nodemailer = require('nodemailer');
 const path = require('path');
 const { createHmac, randomInt, randomUUID, timingSafeEqual } = require('crypto');
 
@@ -370,29 +369,38 @@ function buildInclusionNotificationText(order) {
 }
 
 async function sendOrderEmail(order) {
-  const host = process.env.SMTP_HOST?.trim();
-  const port = Number(process.env.SMTP_PORT);
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM_EMAIL?.trim();
+  const apiKey = process.env.SENDGRID_API_KEY?.trim();
+  const from = process.env.SENDGRID_FROM_EMAIL?.trim();
 
-  if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !user || !pass || !from) {
-    throw new Error('Email не отправлен: настройте SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS и SMTP_FROM_EMAIL.');
+  if (!apiKey || !from) {
+    throw new Error('Email не отправлен: настройте SENDGRID_API_KEY и SENDGRID_FROM_EMAIL.');
   }
 
-  const secure = process.env.SMTP_SECURE
-    ? process.env.SMTP_SECURE.toLowerCase() === 'true'
-    : port === 465;
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: { user, pass },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 15000
-  });
-  const sendEmail = (message) => transporter.sendMail({ from, ...message });
+  async function sendEmail(message) {
+    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: message.to }] }],
+        from: { email: from, name: 'Капля Знаний' },
+        subject: message.subject,
+        content: [
+          { type: 'text/plain', value: message.text },
+          ...(message.html ? [{ type: 'text/html', value: message.html }] : [])
+        ]
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`SendGrid email request failed (HTTP ${response.status}): ${detail}`);
+    }
+  }
+
   const missingLinks = order.items
     .filter((item) => item.category === 'book' && !item.accessUrl && item.id !== 'book-inclusion')
     .map((item) => item.title);

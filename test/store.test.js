@@ -1,7 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { once } = require("node:events");
-const nodemailer = require("nodemailer");
 
 const appModule = require("../server");
 const app = appModule.app || appModule;
@@ -171,40 +170,28 @@ test("Inclusion order email contains a signed link to the private 40-day program
 });
 
 test("paid Inclusion delivery notifies the store email with buyer contact details", async () => {
-  const envKeys = [
-    "SMTP_HOST",
-    "SMTP_PORT",
-    "SMTP_SECURE",
-    "SMTP_USER",
-    "SMTP_PASS",
-    "SMTP_FROM_EMAIL",
-    "CONTACT_EMAIL",
-    "STORE_NOTIFICATION_EMAIL"
-  ];
+  const envKeys = ["SENDGRID_API_KEY", "SENDGRID_FROM_EMAIL", "CONTACT_EMAIL", "STORE_NOTIFICATION_EMAIL"];
   const originalEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
   const sentMessages = [];
-  const originalCreateTransport = nodemailer.createTransport;
+  const originalFetch = global.fetch;
   Object.assign(process.env, {
-    SMTP_HOST: "smtp.example.com",
-    SMTP_PORT: "587",
-    SMTP_SECURE: "false",
-    SMTP_USER: "mailer@example.com",
-    SMTP_PASS: "test-smtp-password",
-    SMTP_FROM_EMAIL: "Store <materials@example.com>",
+    SENDGRID_API_KEY: "test-sendgrid-api-key",
+    SENDGRID_FROM_EMAIL: "materials@example.com",
     CONTACT_EMAIL: "support@example.com",
     STORE_NOTIFICATION_EMAIL: "timursorabekov@gmail.com"
   });
-  nodemailer.createTransport = (config) => {
-    assert.equal(config.host, "smtp.example.com");
-    assert.equal(config.port, 587);
-    assert.equal(config.secure, false);
-    assert.deepEqual(config.auth, { user: "mailer@example.com", pass: "test-smtp-password" });
-    return {
-      sendMail: async (message) => {
-        sentMessages.push(message);
-        return { messageId: "test-message-id" };
-      }
-    };
+  global.fetch = async (url, options) => {
+    assert.equal(url, "https://api.sendgrid.com/v3/mail/send");
+    assert.equal(options.headers.Authorization, "Bearer test-sendgrid-api-key");
+    const payload = JSON.parse(options.body);
+    sentMessages.push({
+      from: payload.from,
+      to: payload.personalizations[0].to[0].email,
+      subject: payload.subject,
+      text: payload.content.find((part) => part.type === "text/plain").value,
+      html: payload.content.find((part) => part.type === "text/html")?.value
+    });
+    return new Response(null, { status: 202 });
   };
 
   try {
@@ -222,7 +209,7 @@ test("paid Inclusion delivery notifies the store email with buyer contact detail
     await appModule.sendOrderEmail(order);
 
     assert.equal(sentMessages.length, 2);
-    assert.equal(sentMessages[0].from, "Store <materials@example.com>");
+    assert.deepEqual(sentMessages[0].from, { email: "materials@example.com", name: "Капля Знаний" });
     assert.equal(sentMessages[0].to, "timursorabekov@gmail.com");
     assert.match(sentMessages[0].subject, /Включение/);
     assert.match(sentMessages[0].text, /Покупатель Тестовый/);
@@ -235,7 +222,7 @@ test("paid Inclusion delivery notifies the store email with buyer contact detail
     assert.match(sentMessages[1].html, /signed-token/);
     assert.ok(order.inclusionOwnerNotifiedAt);
   } finally {
-    nodemailer.createTransport = originalCreateTransport;
+    global.fetch = originalFetch;
     for (const [key, value] of Object.entries(originalEnv)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
@@ -248,23 +235,15 @@ test("Halyk payment session requests an OAuth token and returns widget parameter
     clientId: process.env.HALYK_EPAY_CLIENT_ID,
     clientSecret: process.env.HALYK_EPAY_CLIENT_SECRET,
     terminalId: process.env.HALYK_EPAY_TERMINAL_ID,
-    smtpHost: process.env.SMTP_HOST,
-    smtpPort: process.env.SMTP_PORT,
-    smtpSecure: process.env.SMTP_SECURE,
-    smtpUser: process.env.SMTP_USER,
-    smtpPass: process.env.SMTP_PASS,
-    smtpFromEmail: process.env.SMTP_FROM_EMAIL
+    sendgridApiKey: process.env.SENDGRID_API_KEY,
+    sendgridFromEmail: process.env.SENDGRID_FROM_EMAIL
   };
   Object.assign(process.env, {
     HALYK_EPAY_CLIENT_ID: "test-client",
     HALYK_EPAY_CLIENT_SECRET: "test-client-secret",
     HALYK_EPAY_TERMINAL_ID: "test-terminal",
-    SMTP_HOST: "",
-    SMTP_PORT: "",
-    SMTP_SECURE: "",
-    SMTP_USER: "",
-    SMTP_PASS: "",
-    SMTP_FROM_EMAIL: ""
+    SENDGRID_API_KEY: "",
+    SENDGRID_FROM_EMAIL: ""
   });
 
   const originalFetch = global.fetch;
@@ -361,12 +340,8 @@ test("Halyk payment session requests an OAuth token and returns widget parameter
       HALYK_EPAY_CLIENT_ID: originalEnv.clientId,
       HALYK_EPAY_CLIENT_SECRET: originalEnv.clientSecret,
       HALYK_EPAY_TERMINAL_ID: originalEnv.terminalId,
-      SMTP_HOST: originalEnv.smtpHost,
-      SMTP_PORT: originalEnv.smtpPort,
-      SMTP_SECURE: originalEnv.smtpSecure,
-      SMTP_USER: originalEnv.smtpUser,
-      SMTP_PASS: originalEnv.smtpPass,
-      SMTP_FROM_EMAIL: originalEnv.smtpFromEmail
+      SENDGRID_API_KEY: originalEnv.sendgridApiKey,
+      SENDGRID_FROM_EMAIL: originalEnv.sendgridFromEmail
     })) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
