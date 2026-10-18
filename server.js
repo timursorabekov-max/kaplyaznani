@@ -369,80 +369,27 @@ function buildInclusionNotificationText(order) {
 }
 
 async function sendOrderEmail(order) {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
-  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN?.trim();
-  const from = process.env.GOOGLE_EMAIL?.trim();
+  const mailerUrl = process.env.GOOGLE_MAILER_URL?.trim();
+  const mailerSecret = process.env.GOOGLE_MAILER_SECRET?.trim();
 
-  if (!clientId || !clientSecret || !refreshToken || !from) {
-    throw new Error('Email не отправлен: настройте GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REFRESH_TOKEN и GOOGLE_EMAIL.');
-  }
-
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token'
-    }),
-    signal: AbortSignal.timeout(15000)
-  });
-
-  if (!tokenResponse.ok) {
-    const detail = await tokenResponse.text();
-    throw new Error(`Google OAuth token request failed (HTTP ${tokenResponse.status}): ${detail}`);
-  }
-  const { access_token: accessToken } = await tokenResponse.json();
-  if (!accessToken) {
-    throw new Error('Google OAuth token response did not include an access token.');
+  if (!mailerUrl || !mailerSecret) {
+    throw new Error('Email не отправлен: настройте GOOGLE_MAILER_URL и GOOGLE_MAILER_SECRET.');
   }
 
   async function sendEmail(message) {
-    const boundary = `gmail-${randomUUID()}`;
-    const encodedSubject = `=?UTF-8?B?${Buffer.from(message.subject).toString('base64')}?=`;
-    const plainText = Buffer.from(message.text).toString('base64').replace(/.{1,76}/g, '$&\r\n').trim();
-    const mimeParts = [
-      `From: =?UTF-8?B?${Buffer.from('Капля Знаний').toString('base64')}?= <${from}>`,
-      `To: ${message.to}`,
-      `Subject: ${encodedSubject}`,
-      'MIME-Version: 1.0',
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-      '',
-      `--${boundary}`,
-      'Content-Type: text/plain; charset=UTF-8',
-      'Content-Transfer-Encoding: base64',
-      '',
-      plainText
-    ];
-
-    if (message.html) {
-      const html = Buffer.from(message.html).toString('base64').replace(/.{1,76}/g, '$&\r\n').trim();
-      mimeParts.push(
-        `--${boundary}`,
-        'Content-Type: text/html; charset=UTF-8',
-        'Content-Transfer-Encoding: base64',
-        '',
-        html
-      );
-    }
-
-    mimeParts.push(`--${boundary}--`, '');
-    const raw = Buffer.from(mimeParts.join('\r\n')).toString('base64url');
-    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    const response = await fetch(mailerUrl, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ raw }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: mailerSecret, ...message }),
       signal: AbortSignal.timeout(15000)
     });
 
+    const result = await response.json().catch(() => null);
     if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(`Gmail API email request failed (HTTP ${response.status}): ${detail}`);
+      throw new Error(`Google mailer request failed (HTTP ${response.status}): ${result?.error || response.statusText}`);
+    }
+    if (result?.success !== true) {
+      throw new Error(`Google mailer rejected email: ${result?.error || 'invalid response from Apps Script'}`);
     }
   }
 

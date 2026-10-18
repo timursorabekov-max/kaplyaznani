@@ -171,10 +171,8 @@ test("Inclusion order email contains a signed link to the private 40-day program
 
 test("paid Inclusion delivery notifies the store email with buyer contact details", async () => {
   const envKeys = [
-    "GOOGLE_OAUTH_CLIENT_ID",
-    "GOOGLE_OAUTH_CLIENT_SECRET",
-    "GOOGLE_OAUTH_REFRESH_TOKEN",
-    "GOOGLE_EMAIL",
+    "GOOGLE_MAILER_URL",
+    "GOOGLE_MAILER_SECRET",
     "CONTACT_EMAIL",
     "STORE_NOTIFICATION_EMAIL"
   ];
@@ -182,37 +180,24 @@ test("paid Inclusion delivery notifies the store email with buyer contact detail
   const sentMessages = [];
   const originalFetch = global.fetch;
   Object.assign(process.env, {
-    GOOGLE_OAUTH_CLIENT_ID: "test-google-client-id",
-    GOOGLE_OAUTH_CLIENT_SECRET: "test-google-client-secret",
-    GOOGLE_OAUTH_REFRESH_TOKEN: "test-google-refresh-token",
-    GOOGLE_EMAIL: "timursorabekov@gmail.com",
+    GOOGLE_MAILER_URL: "https://script.google.com/macros/s/test-deployment/exec",
+    GOOGLE_MAILER_SECRET: "test-mailer-secret",
     CONTACT_EMAIL: "support@example.com",
     STORE_NOTIFICATION_EMAIL: "timursorabekov@gmail.com"
   });
-  let oauthRequest;
   global.fetch = async (url, options) => {
-    if (url === "https://oauth2.googleapis.com/token") {
-      oauthRequest = new URLSearchParams(options.body);
-      return Response.json({ access_token: "test-google-access-token" });
-    }
-    assert.equal(url, "https://gmail.googleapis.com/gmail/v1/users/me/messages/send");
-    assert.equal(options.headers.Authorization, "Bearer test-google-access-token");
-    const raw = Buffer.from(JSON.parse(options.body).raw, "base64url").toString("utf8");
-    const textPart = raw.match(/Content-Type: text\/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=\r\n]+?)\r\n--gmail-/);
-    const htmlPart = raw.match(/Content-Type: text\/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=\r\n]+?)\r\n--gmail-/);
-    sentMessages.push({
-      raw,
-      text: textPart ? Buffer.from(textPart[1].replace(/\s/g, ""), "base64").toString("utf8") : "",
-      html: htmlPart ? Buffer.from(htmlPart[1].replace(/\s/g, ""), "base64").toString("utf8") : ""
-    });
-    return Response.json({ id: "gmail-message-" + sentMessages.length });
+    assert.equal(url, process.env.GOOGLE_MAILER_URL);
+    const message = JSON.parse(options.body);
+    assert.equal(message.secret, "test-mailer-secret");
+    sentMessages.push(message);
+    return Response.json({ success: true });
   };
 
   try {
     const inclusion = appModule.products.find((product) => product.id === "book-inclusion");
     const order = {
       id: "TS-paid-inclusion",
-      name: "Test Buyer",
+      name: "Покупатель Тестовый",
       phone: "+77001234567",
       email: "buyer@example.com",
       items: [{ ...inclusion, quantity: 1 }],
@@ -223,19 +208,14 @@ test("paid Inclusion delivery notifies the store email with buyer contact detail
     await appModule.sendOrderEmail(order);
 
     assert.equal(sentMessages.length, 2);
-    assert.equal(oauthRequest.get("client_id"), "test-google-client-id");
-    assert.equal(oauthRequest.get("client_secret"), "test-google-client-secret");
-    assert.equal(oauthRequest.get("refresh_token"), "test-google-refresh-token");
-    assert.equal(oauthRequest.get("grant_type"), "refresh_token");
-    assert.match(sentMessages[0].raw, /<timursorabekov@gmail\.com>/);
-    assert.match(sentMessages[0].raw, /To: timursorabekov@gmail\.com/);
-    assert.match(sentMessages[0].raw, /Subject: =\?UTF-8\?B\?/);
-    assert.match(sentMessages[0].text, /Test Buyer/);
+    assert.equal(sentMessages[0].to, "timursorabekov@gmail.com");
+    assert.match(sentMessages[0].subject, /Включение/);
+    assert.match(sentMessages[0].text, /Покупатель Тестовый/);
     assert.match(sentMessages[0].text, /\+77001234567/);
     assert.match(sentMessages[0].text, /buyer@example\.com/);
     assert.match(sentMessages[0].text, /TS-paid-inclusion/);
     assert.equal(sentMessages[0].text.includes("signed-token"), false);
-    assert.match(sentMessages[1].raw, /To: buyer@example\.com/);
+    assert.equal(sentMessages[1].to, "buyer@example.com");
     assert.match(sentMessages[1].text, /signed-token/);
     assert.match(sentMessages[1].html, /signed-token/);
     assert.ok(order.inclusionOwnerNotifiedAt);
@@ -253,19 +233,15 @@ test("Halyk payment session requests an OAuth token and returns widget parameter
     clientId: process.env.HALYK_EPAY_CLIENT_ID,
     clientSecret: process.env.HALYK_EPAY_CLIENT_SECRET,
     terminalId: process.env.HALYK_EPAY_TERMINAL_ID,
-    googleOAuthClientId: process.env.GOOGLE_OAUTH_CLIENT_ID,
-    googleOAuthClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
-    googleOAuthRefreshToken: process.env.GOOGLE_OAUTH_REFRESH_TOKEN,
-    googleEmail: process.env.GOOGLE_EMAIL
+    googleMailerUrl: process.env.GOOGLE_MAILER_URL,
+    googleMailerSecret: process.env.GOOGLE_MAILER_SECRET
   };
   Object.assign(process.env, {
     HALYK_EPAY_CLIENT_ID: "test-client",
     HALYK_EPAY_CLIENT_SECRET: "test-client-secret",
     HALYK_EPAY_TERMINAL_ID: "test-terminal",
-    GOOGLE_OAUTH_CLIENT_ID: "",
-    GOOGLE_OAUTH_CLIENT_SECRET: "",
-    GOOGLE_OAUTH_REFRESH_TOKEN: "",
-    GOOGLE_EMAIL: ""
+    GOOGLE_MAILER_URL: "",
+    GOOGLE_MAILER_SECRET: ""
   });
 
   const originalFetch = global.fetch;
@@ -362,10 +338,8 @@ test("Halyk payment session requests an OAuth token and returns widget parameter
       HALYK_EPAY_CLIENT_ID: originalEnv.clientId,
       HALYK_EPAY_CLIENT_SECRET: originalEnv.clientSecret,
       HALYK_EPAY_TERMINAL_ID: originalEnv.terminalId,
-      GOOGLE_OAUTH_CLIENT_ID: originalEnv.googleOAuthClientId,
-      GOOGLE_OAUTH_CLIENT_SECRET: originalEnv.googleOAuthClientSecret,
-      GOOGLE_OAUTH_REFRESH_TOKEN: originalEnv.googleOAuthRefreshToken,
-      GOOGLE_EMAIL: originalEnv.googleEmail
+      GOOGLE_MAILER_URL: originalEnv.googleMailerUrl,
+      GOOGLE_MAILER_SECRET: originalEnv.googleMailerSecret
     })) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;

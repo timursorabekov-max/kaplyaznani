@@ -26,11 +26,7 @@ services:
         sync: false
       - key: BOOK_ACCESS_SECRET
         sync: false
-      - key: GOOGLE_OAUTH_CLIENT_ID
+      - key: GOOGLE_MAILER_URL
         sync: false
-      - key: GOOGLE_OAUTH_CLIENT_SECRET
+      - key: GOOGLE_MAILER_SECRET
         sync: false
-      - key: GOOGLE_OAUTH_REFRESH_TOKEN
-        sync: false
-      - key: GOOGLE_EMAIL
-        value: timursorabekov@gmail.com

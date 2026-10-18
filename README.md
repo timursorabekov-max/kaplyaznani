@@ -32,7 +32,7 @@ npm start
 - `HALYK_EPAY_CLIENT_SECRET`
 - `HALYK_EPAY_TERMINAL_ID`
 - `PUBLIC_BASE_URL=https://timurshorabekov.kz`
-- Gmail API OAuth-параметры для отправки писем
+- Google Apps Script mailer URL и секрет для отправки писем
 
 ## Render
 
@@ -88,23 +88,17 @@ npm start
 
 ## Автоматическая отправка материалов
 
-После успешной оплаты система отправляет покупателю письмо с доступом к материалам, а для «Включения» — также уведомление магазину. Отправка выполняется через Gmail API по HTTPS, поэтому не зависит от исходящих SMTP-портов Render.
+После успешной оплаты система отправляет покупателю письмо с доступом к материалам, а для «Включения» — также уведомление магазину. Чтобы не зависеть от заблокированных на Render SMTP-портов и платных сервисов, отправка идёт через бесплатный Google Apps Script mailer, работающий от имени вашего Google-аккаунта.
 
-Настройка Gmail API:
+Настройка mailer (один раз):
 
-1. В Google Cloud создайте проект и включите Gmail API.
-2. Настройте OAuth consent screen и OAuth-клиент.
-3. В OAuth Playground (`https://developers.google.com/oauthplayground/`) укажите собственные OAuth credentials, запросите scope `https://www.googleapis.com/auth/gmail.send`, авторизуйте нужный Gmail-ящик и получите refresh token.
-4. Укажите этот же Gmail-адрес в `GOOGLE_EMAIL` и добавьте OAuth-параметры в Render Environment.
+1. Откройте [script.google.com](https://script.google.com/) под Gmail-аккаунтом, с которого нужно отправлять письма, и создайте проект.
+2. Скопируйте содержимое [`google-mailer/Code.gs`](./google-mailer/Code.gs) в редактор и сохраните.
+3. В **Project Settings → Script Properties** создайте `MAILER_SECRET` с длинным случайным значением. Используйте отдельный секрет, не пароль Gmail или Halyk.
+4. Нажмите **Deploy → New deployment → Web app**. Выберите запуск от своего аккаунта и доступ **Anyone**, затем подтвердите разрешение отправлять почту. Скопируйте URL веб-приложения.
+5. В Render → **Environment** задайте `GOOGLE_MAILER_URL` (URL веб-приложения) и `GOOGLE_MAILER_SECRET` (то же значение, что `MAILER_SECRET`). Удалите старые `SENDGRID_*` и `GOOGLE_OAUTH_*` переменные.
 
-Если приложение Google оставлено в режиме Testing, refresh token для Gmail scope может истечь через 7 дней; для постоянной работы настройте публикацию приложения и выполните требования Google к проверке OAuth. Секреты задайте также в локальном `.env` для разработки:
-
-- `GOOGLE_OAUTH_CLIENT_ID` — OAuth client ID из Google Cloud
-- `GOOGLE_OAUTH_CLIENT_SECRET` — OAuth client secret
-- `GOOGLE_OAUTH_REFRESH_TOKEN` — долгосрочный OAuth refresh token
-- `GOOGLE_EMAIL` — Gmail-адрес, с которого отправляются письма
-
-Добавьте OAuth-параметры в Render Environment; секреты храните только в настройках хостинга или локальном `.env`, не в Git. Без этих параметров письма не отправляются, а ошибка явно записывается сервером.
+Веб-приложение принимает только запросы с правильным секретом; секрет хранится в Script Properties и Render Secrets, не в Git. Бесплатная квота Gmail ограничивает объём ежедневной отправки и может изменяться Google. Если меняете код Apps Script после публикации, создайте новую версию deployment.
 
 При подтверждённой оплате книги «Включение» магазин дополнительно отправляет на `STORE_NOTIFICATION_EMAIL` имя, телефон, email покупателя и номер заказа. Если переменная не задана, используется `CONTACT_EMAIL`.
 
