@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="referrer" content="no-referrer">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Включение · ПЕГАС-40</title>
   <style>
     :root {
@@ -80,9 +80,28 @@
     .video { overflow: hidden; margin: 10px 0; border: 1px solid var(--line); border-radius: 10px; }
     .video iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; }
     .senses { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .sense { padding: 10px; background: rgba(255,255,255,.025); border: 1px solid var(--line); border-radius: 8px; }
+    .sense { min-width: 0; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
     .sense label { margin-top: 0; }
-    .sense input { text-align: center; }
+    .sense input[type="text"] { margin-top: 8px; }
+    .sense-scores { display: flex; flex-wrap: wrap; gap: 4px; }
+    .sense-score {
+      min-width: 30px;
+      min-height: 32px;
+      padding: 4px;
+      color: var(--muted);
+      background: #1a1916;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      font-size: 12px;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .sense-score:hover { border-color: var(--gold); color: var(--text); }
+    .sense-score.selected { color: #0a0a0a; background: var(--gold); border-color: var(--gold); font-weight: 800; }
+    .sense-score:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+    .video { position: relative; background: #000; }
+    .video iframe { min-height: 220px; }
+    .video-fallback { padding: 0 12px 12px; color: var(--muted); font-size: 12px; }
+    .video-fallback a { color: var(--gold); text-decoration: underline; }
     .sense-wide { grid-column: 1 / -1; }
     .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
     .button { min-height: 46px; }
@@ -99,7 +118,7 @@
       .stats { gap: 6px; }
       .stat { padding: 10px 5px; }
       .stat strong { font-size: 23px; }
-      .senses { gap: 6px; }
+      .senses { grid-template-columns: 1fr; gap: 8px; }
       .history-item { font-size: 13px; }
     }
   </style>
@@ -129,7 +148,10 @@
       <div id="scale-morning" class="scale-list"></div>
 
       <div class="section-title">🧘 Ловец жемчуга <span class="tag">Упражнение</span></div>
-      <div class="video"><iframe src="https://www.youtube.com/embed/WwvCe_3FOE4?rel=0" title="Ловец жемчуга — упражнение" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>
+      <div class="video">
+        <iframe src="https://www.youtube-nocookie.com/embed/WwvCe_3FOE4?rel=0" title="Ловец жемчуга — упражнение" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        <p class="video-fallback">Если видео не открывается, <a href="https://www.youtube.com/watch?v=WwvCe_3FOE4" target="_blank" rel="noopener noreferrer">посмотрите его на YouTube</a>.</p>
+      </div>
       <button type="button" class="button" id="pearl-button">✅ Выполнил</button>
 
       <div class="section-title">🔥 20 будильников <span class="tag">Освобождение</span></div>
@@ -148,7 +170,10 @@
       <textarea id="wins-today" placeholder="Большие и маленькие достижения"></textarea>
 
       <div class="section-title">🌈 7 чудес души и тела <span class="tag">Наблюдение</span></div>
-      <div class="video"><iframe src="https://www.youtube.com/embed/ZqG3jnsvTR8?rel=0" title="7 чудес души и тела" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>
+      <div class="video">
+        <iframe src="https://www.youtube-nocookie.com/embed/ZqG3jnsvTR8?rel=0" title="7 чудес души и тела" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        <p class="video-fallback">Если видео не открывается, <a href="https://www.youtube.com/watch?v=ZqG3jnsvTR8" target="_blank" rel="noopener noreferrer">посмотрите его на YouTube</a>.</p>
+      </div>
       <p class="hint">Оцените от −10 до +10 и при желании запишите наблюдение.</p>
       <div id="senses" class="senses"></div>
 
@@ -282,7 +307,27 @@
         senses.forEach((name, index) => {
           const item = document.createElement('div');
           item.className = `sense${index === 6 ? ' sense-wide' : ''}`;
-          item.innerHTML = `<label for="sense-${index}">${name}</label><input id="sense-${index}" type="number" min="-10" max="10" step="1" placeholder="−10 … +10" value="${escapeHtml(data[`sense${index}Score`] || '')}"><input id="sense-note-${index}" type="text" maxlength="200" placeholder="Что именно?" value="${escapeHtml(data[`sense${index}Note`] || '')}" aria-label="${name}: заметка">`;
+          const score = data[`sense${index}Score`] ?? '';
+          item.innerHTML = `<label>${name} <span class="muted">· оценка от −10 до +10</span></label><input id="sense-${index}" type="hidden" value="${escapeHtml(score)}"><div class="sense-scores" role="group" aria-label="${name}: оценка от минус десяти до плюс десяти"></div><input id="sense-note-${index}" type="text" maxlength="200" placeholder="Что именно?" value="${escapeHtml(data[`sense${index}Note`] || '')}" aria-label="${name}: заметка">`;
+          const scoreInput = item.querySelector(`#sense-${index}`);
+          const scoreGroup = item.querySelector('.sense-scores');
+          for (let value = -10; value <= 10; value += 1) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `sense-score${String(score) === String(value) ? ' selected' : ''}`;
+            button.textContent = value > 0 ? `+${value}` : String(value);
+            button.setAttribute('aria-pressed', String(String(score) === String(value)));
+            button.setAttribute('aria-label', `${name}: ${value > 0 ? 'плюс ' : value < 0 ? 'минус ' : ''}${Math.abs(value)}`);
+            button.addEventListener('click', () => {
+              scoreInput.value = String(value);
+              scoreGroup.querySelectorAll('.sense-score').forEach((choice) => {
+                const selected = choice === button;
+                choice.classList.toggle('selected', selected);
+                choice.setAttribute('aria-pressed', String(selected));
+              });
+            });
+            scoreGroup.append(button);
+          }
           container.append(item);
         });
       }
