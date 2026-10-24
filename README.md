@@ -31,8 +31,9 @@ npm start
 - `HALYK_EPAY_CLIENT_ID`
 - `HALYK_EPAY_CLIENT_SECRET`
 - `HALYK_EPAY_TERMINAL_ID`
-- `PUBLIC_BASE_URL=https://timurshorabekov.kz`
+- `PUBLIC_BASE_URL=https://kaplyaznani-store.onrender.com` (публичный адрес Render для callback и возврата Halyk; меняйте на собственный домен только после проверки DNS и привязки домена к сервису)
 - Google Apps Script mailer URL и секрет для отправки писем
+- `CRM_ADMIN_PASSWORD` — пароль для закрытой CRM-страницы `/admin/traffic`
 
 ## Render
 
@@ -95,10 +96,14 @@ npm start
 1. Откройте [script.google.com](https://script.google.com/) под Gmail-аккаунтом, с которого нужно отправлять письма, и создайте проект.
 2. Скопируйте содержимое [`google-mailer/Code.gs`](./google-mailer/Code.gs) в редактор и сохраните.
 3. В **Project Settings → Script Properties** создайте `MAILER_SECRET` с длинным случайным значением. Используйте отдельный секрет, не пароль Gmail или Halyk.
-4. Нажмите **Deploy → New deployment → Web app**. Выберите запуск от своего аккаунта и доступ **Anyone**, затем подтвердите разрешение отправлять почту. Скопируйте URL веб-приложения.
-5. В Render → **Environment** задайте `GOOGLE_MAILER_URL` (URL веб-приложения) и `GOOGLE_MAILER_SECRET` (то же значение, что `MAILER_SECRET`). Удалите старые `SENDGRID_*` и `GOOGLE_OAUTH_*` переменные.
+4. В тех же **Script Properties** задайте `SPREADSHEET_ID` — идентификатор таблицы между `/d/` и `/edit` в её URL. Скрипт создаст в ней вкладки `ПЕГАС-40` и `Посещаемость`; не делайте таблицу общедоступной.
+5. Запустите функцию `setupDailyCleanup` из редактора Apps Script один раз и подтвердите разрешение на создание ежедневного триггера. Записи и аналитика старше 12 месяцев будут удаляться ежедневно.
+6. Нажмите **Deploy → New deployment → Web app**. Выберите запуск от своего аккаунта и доступ **Anyone**, затем подтвердите разрешения на отправку почты и изменение таблицы. Скопируйте URL веб-приложения.
+7. В Render → **Environment** задайте `GOOGLE_MAILER_URL` (URL веб-приложения), `GOOGLE_MAILER_SECRET` (то же значение, что `MAILER_SECRET`) и уникальный `CRM_ADMIN_PASSWORD`. Удалите старые `SENDGRID_*` и `GOOGLE_OAUTH_*` переменные.
 
 Веб-приложение принимает только запросы с правильным секретом; секрет хранится в Script Properties и Render Secrets, не в Git. Бесплатная квота Gmail ограничивает объём ежедневной отправки и может изменяться Google. Если меняете код Apps Script после публикации, создайте новую версию deployment.
+
+Участник программы может отдельно согласиться на отправку дневных записей и заметок в закрытую Google Таблицу. Записи удаляются через 12 месяцев. Статистика сайта собирает путь страницы, источник перехода и тип устройства; IP-адреса и полные URL перехода не сохраняются. CRM доступна по `/admin/traffic` после Basic Auth (логин `admin`, пароль `CRM_ADMIN_PASSWORD`).
 
 При подтверждённой оплате книги «Включение» магазин дополнительно отправляет на `STORE_NOTIFICATION_EMAIL` имя, телефон, email покупателя и номер заказа. Если переменная не задана, используется `CONTACT_EMAIL`.
 

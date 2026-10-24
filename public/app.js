@@ -245,4 +245,41 @@ checkoutForm.addEventListener('submit', async (event) => {
   }
 });
 
+function trackVisit() {
+  const page = window.location.pathname;
+  const marker = `site-visit:${page}`;
+  try {
+    if (sessionStorage.getItem(marker)) return;
+  } catch (error) {
+    console.error('Не удалось проверить отметку посещения:', error);
+  }
+
+  const userAgent = navigator.userAgent;
+  const device = /iPad|Tablet|PlayBook|Silk/i.test(userAgent)
+    ? 'tablet'
+    : /Mobi|Android|iPhone|iPod/i.test(userAgent)
+      ? 'mobile'
+      : 'desktop';
+  const params = new URLSearchParams(window.location.search);
+
+  fetch('/api/analytics/visit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      page,
+      referrer: document.referrer,
+      source: params.get('utm_source') || '',
+      device
+    })
+  }).then((response) => {
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    try {
+      sessionStorage.setItem(marker, '1');
+    } catch (error) {
+      console.error('Не удалось сохранить отметку посещения:', error);
+    }
+  }).catch((error) => console.error('Не удалось записать посещение сайта:', error));
+}
+
+trackVisit();
 loadProducts();

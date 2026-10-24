@@ -11,7 +11,7 @@ services:
       - key: PORT
         value: 10000
       - key: PUBLIC_BASE_URL
-        value: https://timurshorabekov.kz
+        value: https://kaplyaznani-store.onrender.com
       - key: CONTACT_EMAIL
         sync: false
       - key: STORE_NOTIFICATION_EMAIL
@@ -29,4 +29,6 @@ services:
       - key: GOOGLE_MAILER_URL
         sync: false
       - key: GOOGLE_MAILER_SECRET
+        sync: false
+      - key: CRM_ADMIN_PASSWORD
         sync: false

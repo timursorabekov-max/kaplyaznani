@@ -89,6 +89,9 @@
     .button-primary { color: #0a0a0a; background: var(--gold); border-color: var(--gold); font-weight: 800; }
     .history-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
     .notice { margin-top: 20px; padding: 12px; color: var(--muted); background: rgba(200,168,75,.06); border-radius: 8px; font-size: 12px; }
+    .consent { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; text-transform: none; }
+    .consent input { flex: 0 0 auto; margin-top: 3px; accent-color: var(--gold); }
+    #sync-status { min-height: 1.5em; }
     #toast { position: fixed; left: 50%; bottom: 20px; z-index: 5; transform: translateX(-50%); padding: 12px 18px; color: #0a0a0a; background: var(--gold); border-radius: 8px; font-weight: 700; }
     #toast[hidden] { display: none; }
     @media (max-width: 480px) {
@@ -105,7 +108,7 @@
   <main class="container">
     <header class="topbar">
       <div class="logo">ПЕГАС<span>·40</span></div>
-      <div class="privacy">ЗАКРЫТАЯ ПРОГРАММА<br>Ваши записи остаются в этом браузере</div>
+      <div class="privacy">ЗАКРЫТАЯ ПРОГРАММА<br>Записи хранятся в браузере, если вы не включите синхронизацию</div>
     </header>
     <section class="hero">
       <h1>Программа <span class="gold">«Включение»</span></h1>
@@ -153,6 +156,11 @@
       <div id="scale-evening" class="scale-list"></div>
 
       <button type="button" class="button button-primary" id="save-day" style="width:100%;margin-top:18px">💾 Сохранить день</button>
+      <label class="consent">
+        <input id="sheet-consent" type="checkbox">
+        <span>Я согласен отправлять мои дневные записи, включая оценки и текстовые заметки, в закрытую Google Таблицу школы. Доступ к ней есть у уполномоченных сотрудников; записи будут храниться до 12 месяцев. Не указывайте сведения, которыми не хотите делиться.</span>
+      </label>
+      <p id="sync-status" class="hint" role="status" aria-live="polite"></p>
     </section>
 
     <section>
@@ -163,7 +171,7 @@
         <button type="button" class="button" id="clear-data">Очистить прогресс</button>
       </div>
     </section>
-    <p class="notice">Прогресс хранится только в локальном хранилище этого браузера и не отправляется в Google Таблицы. Очистка данных браузера или переход на другое устройство может удалить записи — скачивайте отчёт для резервной копии.</p>
+    <p class="notice">Без включённого согласия записи хранятся только в этом браузере и не отправляются в Google Таблицу. При включённом согласии сохранённые дни отправляются в таблицу школы. Очистка прогресса удаляет локальную копию, но не данные, уже отправленные в таблицу; для их удаления обратитесь в поддержку школы. Скачивайте отчёт для резервной копии.</p>
   </main>
   <div id="toast" role="status" hidden></div>
 
@@ -183,6 +191,39 @@
       let allData = readData();
       let currentDay = getNextDay();
       let currentBurned = false;
+
+      function trackVisit() {
+        const marker = 'pegas40-visit-recorded';
+        try {
+          if (sessionStorage.getItem(marker)) return;
+        } catch (error) {
+          console.error('Не удалось проверить отметку посещения:', error);
+        }
+        const params = new URLSearchParams(location.search);
+        const userAgent = navigator.userAgent;
+        const device = /iPad|Tablet|PlayBook|Silk/i.test(userAgent)
+          ? 'tablet'
+          : /Mobi|Android|iPhone|iPod/i.test(userAgent)
+            ? 'mobile'
+            : 'desktop';
+        fetch('/api/analytics/visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            page: '/program/vklyuchenie',
+            referrer: document.referrer,
+            source: params.get('utm_source') || '',
+            device
+          })
+        }).then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          try {
+            sessionStorage.setItem(marker, '1');
+          } catch (error) {
+            console.error('Не удалось сохранить отметку посещения:', error);
+          }
+        }).catch((error) => console.error('Не удалось записать посещение программы:', error));
+      }
 
       function readData() {
         try {
@@ -354,7 +395,7 @@
         currentBurned = true;
         document.getElementById('burn-result').textContent = '🔥 Отмечено. Вы можете вернуться к этому позже.';
       });
-      document.getElementById('save-day').addEventListener('click', () => {
+      document.getElementById('save-day').addEventListener('click', async () => {
         const morning = selectedValue('scale-morning');
         const evening = selectedValue('scale-evening');
         if (morning === null || evening === null) {
@@ -383,6 +424,25 @@
         if (index < 0) allData.push(data);
         else allData[index] = data;
         persist();
+        const syncStatus = document.getElementById('sync-status');
+        if (document.getElementById('sheet-consent').checked) {
+          syncStatus.textContent = 'Отправляем запись в защищённую таблицу…';
+          try {
+            const response = await fetch('/api/program/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ access: accessToken, days: allData })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Не удалось синхронизировать запись.');
+            syncStatus.textContent = 'Запись сохранена в этом браузере и отправлена в таблицу.';
+          } catch (error) {
+            console.error('Не удалось синхронизировать запись с таблицей:', error);
+            syncStatus.textContent = 'Запись сохранена в браузере, но не отправлена в таблицу. Проверьте подключение и попробуйте сохранить день ещё раз.';
+          }
+        } else {
+          syncStatus.textContent = 'Запись сохранена только в этом браузере. Чтобы отправить её в таблицу, включите согласие выше.';
+        }
         currentDay = getNextDay();
         updateSelector();
         updateHistory();
@@ -406,6 +466,7 @@
         persist();
         updateHistory();
         loadDay(currentDay);
+        trackVisit();
         showToast('Прогресс удалён.');
       });
 

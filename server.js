@@ -120,6 +120,90 @@ app.get('/program/vklyuchenie', (req, res) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/admin/traffic', requireCrmAuth, (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  return res.sendFile(path.join(__dirname, 'admin', 'traffic.html'));
+});
+
+app.get('/api/admin/analytics', requireCrmAuth, async (req, res) => {
+  try {
+    const result = await postToGoogleSheet({ action: 'getAnalytics' });
+    return res.json({ analytics: result.analytics });
+  } catch (error) {
+    console.error('CRM analytics request failed:', error);
+    return res.status(502).json({ error: 'Не удалось загрузить статистику. Проверьте настройки Google Sheets.' });
+  }
+});
+
+app.post('/api/analytics/visit', async (req, res) => {
+  const { page, referrer, source, device } = req.body || {};
+  if (
+    typeof page !== 'string' || !/^\/[a-zA-Z0-9/_-]{0,120}$/.test(page) ||
+    typeof referrer !== 'string' || referrer.length > 300 ||
+    typeof source !== 'string' || source.length > 100 ||
+    !['mobile', 'tablet', 'desktop'].includes(device)
+  ) {
+    return res.status(400).json({ error: 'Некорректные данные посещения.' });
+  }
+
+  let referrerHost = '';
+  if (referrer) {
+    try {
+      referrerHost = new URL(referrer).host.slice(0, 200);
+    } catch {
+      return res.status(400).json({ error: 'Некорректный источник посещения.' });
+    }
+  }
+
+  try {
+    await postToGoogleSheet({
+      action: 'recordVisit',
+      visit: {
+        page,
+        referrer: referrerHost,
+        source: source.trim().slice(0, 100) || referrerHost || 'direct',
+        device
+      }
+    });
+    return res.status(202).json({ ok: true });
+  } catch (error) {
+    console.error('Analytics visit could not be recorded:', error);
+    return res.status(502).json({ error: 'Не удалось сохранить посещение.' });
+  }
+});
+
+app.post('/api/program/progress', async (req, res) => {
+  const { access, days } = req.body || {};
+  if (!isValidInclusionAccessToken(access)) {
+    return res.status(403).json({ error: 'Ссылка доступа недействительна.' });
+  }
+  if (
+    !Array.isArray(days) || days.length < 1 || days.length > 40 ||
+    days.some((day) => (
+      !day || typeof day !== 'object' ||
+      !Number.isInteger(day.day) || day.day < 1 || day.day > 40 ||
+      !Number.isInteger(day.morning) || day.morning < -6 || day.morning > 6 ||
+      !Number.isInteger(day.evening) || day.evening < -6 || day.evening > 6 ||
+      JSON.stringify(day).length > 20000
+    )) ||
+    new Set(days.map((day) => day.day)).size !== days.length
+  ) {
+    return res.status(400).json({ error: 'Проверьте сохранённые записи перед синхронизацией.' });
+  }
+
+  const orderId = access.slice(0, access.lastIndexOf('.'));
+  const recordId = createHmac('sha256', process.env.BOOK_ACCESS_SECRET?.trim() || getHalykCredentials().clientSecret)
+    .update(`program-progress:${orderId}`)
+    .digest('hex');
+  try {
+    await postToGoogleSheet({ action: 'saveProgress', recordId, days });
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error('Program progress could not be saved to Google Sheets:', error);
+    return res.status(502).json({ error: 'День сохранён в браузере, но не удалось записать его в таблицу.' });
+  }
+});
+
 function formatPrice(value) {
   return Number(value).toLocaleString('ru-KZ', {
     style: 'currency',
@@ -201,6 +285,60 @@ function isValidInclusionAccessToken(token) {
     console.error('Inclusion program access is not configured:', error.message);
     return false;
   }
+}
+
+function requireCrmAuth(req, res, next) {
+  const expectedPassword = process.env.CRM_ADMIN_PASSWORD?.trim();
+  if (!expectedPassword) {
+    return res.status(503).send('CRM не настроена: задайте CRM_ADMIN_PASSWORD в переменных окружения.');
+  }
+
+  const [scheme, encoded] = String(req.get('authorization') || '').split(' ');
+  if (scheme !== 'Basic' || !encoded) {
+    res.set('WWW-Authenticate', 'Basic realm="Site analytics", charset="UTF-8"');
+    return res.status(401).send('Требуется авторизация.');
+  }
+
+  let credentials;
+  try {
+    credentials = Buffer.from(encoded, 'base64').toString('utf8');
+  } catch {
+    credentials = '';
+  }
+  const separator = credentials.indexOf(':');
+  const username = separator < 0 ? '' : credentials.slice(0, separator);
+  const password = separator < 0 ? '' : credentials.slice(separator + 1);
+  if (username !== 'admin' || !safeEqual(password, expectedPassword)) {
+    res.set('WWW-Authenticate', 'Basic realm="Site analytics", charset="UTF-8"');
+    return res.status(401).send('Неверный логин или пароль.');
+  }
+  return next();
+}
+
+async function postToGoogleSheet(payload) {
+  const mailerUrl = process.env.GOOGLE_MAILER_URL?.trim();
+  const mailerSecret = process.env.GOOGLE_MAILER_SECRET?.trim();
+  if (!mailerUrl || !mailerSecret) {
+    throw new Error('Google Sheets integration is not configured.');
+  }
+
+  const response = await fetch(mailerUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret: mailerSecret, ...payload }),
+    signal: AbortSignal.timeout(15000)
+  });
+  const body = await response.text();
+  let result;
+  try {
+    result = JSON.parse(body);
+  } catch {
+    throw new Error(`Google Apps Script returned an invalid response (HTTP ${response.status}).`);
+  }
+  if (!response.ok || result?.success !== true) {
+    throw new Error(result?.error || `Google Apps Script request failed (HTTP ${response.status}).`);
+  }
+  return result;
 }
 
 async function readHalykResponse(response) {

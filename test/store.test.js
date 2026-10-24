@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { once } = require("node:events");
+const { createHmac } = require("node:crypto");
 
 const appModule = require("../server");
 const app = appModule.app || appModule;
@@ -219,6 +220,151 @@ test("paid Inclusion delivery notifies the store email with buyer contact detail
     assert.match(sentMessages[1].text, /signed-token/);
     assert.match(sentMessages[1].html, /signed-token/);
     assert.ok(order.inclusionOwnerNotifiedAt);
+  } finally {
+    global.fetch = originalFetch;
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("program progress is sent to Sheets only with a valid access token", async () => {
+  const envKeys = ["BOOK_ACCESS_SECRET", "GOOGLE_MAILER_URL", "GOOGLE_MAILER_SECRET"];
+  const originalEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const originalFetch = global.fetch;
+  const accessSecret = "test-program-secret";
+  const orderId = "TS-progress-test";
+  const signature = createHmac("sha256", accessSecret).update(`inclusion:${orderId}`).digest("hex");
+  const access = `${orderId}.${signature}`;
+  let sheetRequest;
+  Object.assign(process.env, {
+    BOOK_ACCESS_SECRET: accessSecret,
+    GOOGLE_MAILER_URL: "https://script.google.com/macros/s/test-deployment/exec",
+    GOOGLE_MAILER_SECRET: "test-sheet-secret"
+  });
+  global.fetch = async (input, options = {}) => {
+    if (String(input).startsWith("http://127.0.0.1:")) return originalFetch(input, options);
+    sheetRequest = JSON.parse(options.body);
+    return Response.json({ success: true });
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const invalid = await fetch(`${baseUrl}/api/program/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access: "invalid", days: [{ day: 1, morning: 1, evening: 1 }] })
+      });
+      assert.equal(invalid.status, 403);
+
+      const response = await fetch(`${baseUrl}/api/program/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access,
+          days: [
+            { day: 1, morning: -1, evening: 2, winsToday: "Сделал упражнение", burnText: "Личная заметка" },
+            { day: 2, morning: 0, evening: 1, winsToday: "Вторая запись" }
+          ]
+        })
+      });
+      assert.equal(response.status, 200);
+      assert.equal(sheetRequest.action, "saveProgress");
+      assert.equal(sheetRequest.secret, "test-sheet-secret");
+      assert.equal(sheetRequest.days[0].winsToday, "Сделал упражнение");
+      assert.equal(sheetRequest.days.length, 2);
+      assert.equal(sheetRequest.recordId.includes(orderId), false);
+      assert.equal(JSON.stringify(sheetRequest).includes(access), false);
+    });
+  } finally {
+    global.fetch = originalFetch;
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("analytics stores referrer host and device but never the full referrer URL", async () => {
+  const envKeys = ["GOOGLE_MAILER_URL", "GOOGLE_MAILER_SECRET"];
+  const originalEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const originalFetch = global.fetch;
+  let sheetRequest;
+  Object.assign(process.env, {
+    GOOGLE_MAILER_URL: "https://script.google.com/macros/s/test-deployment/exec",
+    GOOGLE_MAILER_SECRET: "test-sheet-secret"
+  });
+  global.fetch = async (input, options = {}) => {
+    if (String(input).startsWith("http://127.0.0.1:")) return originalFetch(input, options);
+    sheetRequest = JSON.parse(options.body);
+    return Response.json({ success: true });
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/analytics/visit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          page: "/",
+          referrer: "https://search.example/search?personal=query",
+          source: "campaign",
+          device: "mobile"
+        })
+      });
+      assert.equal(response.status, 202);
+      assert.equal(sheetRequest.action, "recordVisit");
+      assert.deepEqual(sheetRequest.visit, {
+        page: "/",
+        referrer: "search.example",
+        source: "campaign",
+        device: "mobile"
+      });
+    });
+  } finally {
+    global.fetch = originalFetch;
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test("traffic CRM requires the configured password", async () => {
+  const envKeys = ["CRM_ADMIN_PASSWORD", "GOOGLE_MAILER_URL", "GOOGLE_MAILER_SECRET"];
+  const originalEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  const originalFetch = global.fetch;
+  process.env.GOOGLE_MAILER_URL = "https://script.google.com/macros/s/test-deployment/exec";
+  process.env.GOOGLE_MAILER_SECRET = "test-sheet-secret";
+  process.env.CRM_ADMIN_PASSWORD = "crm-test-password";
+  global.fetch = async (input, options = {}) => {
+    if (String(input).startsWith("http://127.0.0.1:")) return originalFetch(input, options);
+    const message = JSON.parse(options.body);
+    assert.equal(message.action, "getAnalytics");
+    return Response.json({
+      success: true,
+      analytics: { total: 7, days: { "2026-10-24": 7 }, pages: { "/": 7 }, sources: { direct: 7 }, devices: { mobile: 7 } }
+    });
+  };
+  try {
+    await withServer(async (baseUrl) => {
+      const denied = await fetch(`${baseUrl}/admin/traffic`);
+      assert.equal(denied.status, 401);
+      const deniedAnalytics = await fetch(`${baseUrl}/api/admin/analytics`);
+      assert.equal(deniedAnalytics.status, 401);
+      const authorization = `Basic ${Buffer.from("admin:crm-test-password").toString("base64")}`;
+      const authorized = await fetch(`${baseUrl}/admin/traffic`, {
+        headers: { Authorization: authorization }
+      });
+      assert.equal(authorized.status, 200);
+      assert.match(await authorized.text(), /Посещаемость сайта/);
+      const analytics = await fetch(`${baseUrl}/api/admin/analytics`, {
+        headers: { Authorization: authorization }
+      });
+      assert.equal(analytics.status, 200);
+      assert.equal((await analytics.json()).analytics.total, 7);
+    });
   } finally {
     global.fetch = originalFetch;
     for (const [key, value] of Object.entries(originalEnv)) {
